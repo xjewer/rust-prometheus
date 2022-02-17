@@ -13,18 +13,31 @@ use std::io::Write;
 use crate::errors::{Error, Result};
 use crate::proto::MetricFamily;
 
+/// Encoder types
+#[derive(Debug)]
+pub enum EncoderType {
+    /// Plain text encoder type
+    TextEncoder,
+    /// Protobuf encoder type
+    #[cfg(feature = "protobuf")]
+    ProtobufEncoder,
+}
+
 /// An interface for encoding metric families into an underlying wire protocol.
-pub trait Encoder {
+pub trait Encoder<W: Write = Vec<u8>>: EncoderFormatType {
     /// `encode` converts a slice of MetricFamily proto messages into target
-    /// format and writes the resulting lines to `writer`. It returns the number
+    /// format and writes the resulting lines to `Write`. It returns the number
     /// of bytes written and any error encountered. This function does not
     /// perform checks on the content of the metric and label names,
     /// i.e. invalid metric or label names will result in invalid text format
     /// output.
-    fn encode<W: Write>(&self, _: &[MetricFamily], _: &mut W) -> Result<()>;
+    fn encode(&self, _: &[MetricFamily], _: &mut W ) -> Result<()>;
+}
 
-    /// `format_type` returns target format.
-    fn format_type(&self) -> &str;
+/// An interface to return encoder type
+pub trait EncoderFormatType {
+        /// `format_type` returns target format.
+        fn format_type(&self) -> &str;
 }
 
 fn check_metric_family(mf: &MetricFamily) -> Result<()> {

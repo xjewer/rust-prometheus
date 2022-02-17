@@ -53,7 +53,7 @@ fn main() {
         PUSH_COUNTER.inc();
         let metric_families = prometheus::gather();
         let _timer = PUSH_REQ_HISTOGRAM.start_timer(); // drop as observe
-        prometheus::push_metrics(
+        prometheus::push_metrics_with_encoder(
             "example_push",
             labels! {"instance".to_owned() => "HAL-9000".to_owned(),},
             &address,
@@ -62,6 +62,7 @@ fn main() {
                 username: "user".to_owned(),
                 password: "pass".to_owned(),
             }),
+            prometheus::EncoderType::TextEncoder,
         )
         .unwrap();
     }

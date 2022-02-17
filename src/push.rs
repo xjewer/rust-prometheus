@@ -11,8 +11,10 @@ use reqwest::header::CONTENT_TYPE;
 use reqwest::{Method, StatusCode, Url};
 
 use lazy_static::lazy_static;
-
-use crate::encoder::{Encoder, ProtobufEncoder};
+#[cfg(feature = "protobuf")]
+use crate::encoder::ProtobufEncoder;
+use crate::encoder::{Encoder, EncoderType};
+use crate::encoder::TextEncoder;
 use crate::errors::{Error, Result};
 use crate::metrics::Collector;
 use crate::proto;
@@ -59,8 +61,27 @@ pub fn push_metrics<S: BuildHasher>(
     mfs: Vec<proto::MetricFamily>,
     basic_auth: Option<BasicAuthentication>,
 ) -> Result<()> {
-    push(job, grouping, url, mfs, "PUT", basic_auth)
+    #[cfg(not(feature = "protobuf"))]
+    let encoder_type = EncoderType::TextEncoder;
+    #[cfg(feature = "protobuf")]
+    let encoder_type = EncoderType::ProtobufEncoder;
+
+    push(job, grouping, url, mfs, "PUT", basic_auth, encoder_type)
 }
+
+/// push_metrics_with_encoder works like `push_metrics`,
+/// but allows specifying encoder type.
+pub fn push_metrics_with_encoder<S: BuildHasher>(
+    job: &str,
+    grouping: HashMap<String, String, S>,
+    url: &str,
+    mfs: Vec<proto::MetricFamily>,
+    basic_auth: Option<BasicAuthentication>,
+    encoder_type: EncoderType,
+) -> Result<()> {
+    push(job, grouping, url, mfs, "PUT", basic_auth, encoder_type)
+}
+
 
 /// `push_add_metrics` works like `push_metrics`, but only previously pushed
 /// metrics with the same name (and the same job and other grouping labels) will
@@ -72,7 +93,25 @@ pub fn push_add_metrics<S: BuildHasher>(
     mfs: Vec<proto::MetricFamily>,
     basic_auth: Option<BasicAuthentication>,
 ) -> Result<()> {
-    push(job, grouping, url, mfs, "POST", basic_auth)
+    #[cfg(not(feature = "protobuf"))]
+    let encoder_type = EncoderType::TextEncoder;
+    #[cfg(feature = "protobuf")]
+    let encoder_type = EncoderType::ProtobufEncoder;
+
+    push(job, grouping, url, mfs, "POST", basic_auth, encoder_type)
+}
+
+/// `push_add_metrics_with_encoder` works like `push_add_metrics`,
+/// but allows specifying encoder type.
+pub fn push_add_metrics_with_encoder<S: BuildHasher>(
+    job: &str,
+    grouping: HashMap<String, String, S>,
+    url: &str,
+    mfs: Vec<proto::MetricFamily>,
+    basic_auth: Option<BasicAuthentication>,
+    encoder_type: EncoderType,
+) -> Result<()> {
+    push(job, grouping, url, mfs, "POST", basic_auth, encoder_type)
 }
 
 const LABEL_NAME_JOB: &str = "job";
@@ -84,6 +123,7 @@ fn push<S: BuildHasher>(
     mfs: Vec<proto::MetricFamily>,
     method: &str,
     basic_auth: Option<BasicAuthentication>,
+    encoder_type: EncoderType,
 ) -> Result<()> {
     // Suppress clippy warning needless_pass_by_value.
     let grouping = grouping;
@@ -120,7 +160,13 @@ fn push<S: BuildHasher>(
 
     push_url = format!("{}/metrics/job/{}", push_url, url_components.join("/"));
 
-    let encoder = ProtobufEncoder::new();
+    
+    let encoder: Box<dyn Encoder> = match encoder_type {
+        EncoderType::TextEncoder => Box::new(TextEncoder::new()),
+        #[cfg(feature = "protobuf")]
+        EncoderType::ProtobufEncoder => Box::new(ProtobufEncoder::new()),
+    };
+
     let mut buf = Vec::new();
 
     for mf in mfs {
@@ -180,6 +226,7 @@ fn push_from_collector<S: BuildHasher>(
     collectors: Vec<Box<dyn Collector>>,
     method: &str,
     basic_auth: Option<BasicAuthentication>,
+    encoder_type: EncoderType,
 ) -> Result<()> {
     let registry = Registry::new();
     for bc in collectors {
@@ -187,7 +234,7 @@ fn push_from_collector<S: BuildHasher>(
     }
 
     let mfs = registry.gather();
-    push(job, grouping, url, mfs, method, basic_auth)
+    push(job, grouping, url, mfs, method, basic_auth, encoder_type)
 }
 
 /// `push_collector` push metrics collected from the provided collectors. It is
@@ -199,7 +246,25 @@ pub fn push_collector<S: BuildHasher>(
     collectors: Vec<Box<dyn Collector>>,
     basic_auth: Option<BasicAuthentication>,
 ) -> Result<()> {
-    push_from_collector(job, grouping, url, collectors, "PUT", basic_auth)
+    #[cfg(not(feature = "protobuf"))]
+    let encoder_type = EncoderType::TextEncoder;
+    #[cfg(feature = "protobuf")]
+    let encoder_type = EncoderType::ProtobufEncoder;
+
+    push_from_collector(job, grouping, url, collectors, "PUT", basic_auth, encoder_type)
+}
+
+/// `push_collector_with_encoder` works like `push_collector`,
+/// but allows specifying encoder type.
+pub fn push_collector_with_encoder<S: BuildHasher>(
+    job: &str,
+    grouping: HashMap<String, String, S>,
+    url: &str,
+    collectors: Vec<Box<dyn Collector>>,
+    basic_auth: Option<BasicAuthentication>,
+    encoder_type: EncoderType,
+) -> Result<()> {
+    push_from_collector(job, grouping, url, collectors, "PUT", basic_auth, encoder_type)
 }
 
 /// `push_add_collector` works like `push_add_metrics`, it collects from the
@@ -211,7 +276,24 @@ pub fn push_add_collector<S: BuildHasher>(
     collectors: Vec<Box<dyn Collector>>,
     basic_auth: Option<BasicAuthentication>,
 ) -> Result<()> {
-    push_from_collector(job, grouping, url, collectors, "POST", basic_auth)
+    #[cfg(not(feature = "protobuf"))]
+    let encoder_type = EncoderType::TextEncoder;
+    #[cfg(feature = "protobuf")]
+    let encoder_type = EncoderType::ProtobufEncoder;
+    push_from_collector(job, grouping, url, collectors, "POST", basic_auth, encoder_type)
+}
+
+/// `push_add_collector_with_encoder` works like `push_add_collector`,
+/// but allows specifying encoder type.
+pub fn push_add_collector_with_encoder<S: BuildHasher>(
+    job: &str,
+    grouping: HashMap<String, String, S>,
+    url: &str,
+    collectors: Vec<Box<dyn Collector>>,
+    basic_auth: Option<BasicAuthentication>,
+    encoder_type: EncoderType,
+) -> Result<()> {
+    push_from_collector(job, grouping, url, collectors, "POST", basic_auth, encoder_type)
 }
 
 const DEFAULT_GROUP_LABEL_PAIR: (&str, &str) = ("instance", "unknown");
@@ -274,11 +356,11 @@ mod tests {
         ];
 
         for case in table {
-            let mut l = proto::LabelPair::new();
+            let mut l = proto::LabelPair::default();
             l.set_name(case.0.to_owned());
-            let mut m = proto::Metric::new();
+            let mut m = proto::Metric::default();
             m.set_label(from_vec!(vec![l]));
-            let mut mf = proto::MetricFamily::new();
+            let mut mf = proto::MetricFamily::default();
             mf.set_metric(from_vec!(vec![m]));
             let res = push_metrics("test", hostname_grouping_key(), "mockurl", vec![mf], None);
             assert!(format!("{}", res.unwrap_err()).contains(case.1));

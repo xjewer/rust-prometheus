@@ -7,7 +7,7 @@ use crate::errors::Result;
 use crate::histogram::BUCKET_LABEL;
 use crate::proto::{self, MetricFamily, MetricType};
 
-use super::{check_metric_family, Encoder};
+use super::{check_metric_family, Encoder, EncoderFormatType};
 
 /// The text format of metric family.
 pub const TEXT_FORMAT: &str = "text/plain; version=0.0.4";
@@ -158,11 +158,16 @@ impl TextEncoder {
     }
 }
 
-impl Encoder for TextEncoder {
-    fn encode<W: Write>(&self, metric_families: &[MetricFamily], writer: &mut W) -> Result<()> {
+impl<W> Encoder<W> for TextEncoder
+where
+    W: Write
+{
+    fn encode(&self, metric_families: &[MetricFamily], writer: &mut W) -> Result<()> {
         self.encode_impl(metric_families, &mut *writer)
     }
+}
 
+impl EncoderFormatType for TextEncoder {
     fn format_type(&self) -> &str {
         TEXT_FORMAT
     }
@@ -339,7 +344,7 @@ mod tests {
         counter.inc();
 
         let mf = counter.collect();
-        let mut writer = Vec::<u8>::new();
+        let mut writer = Box::new(Vec::<u8>::new());
         let encoder = TextEncoder::new();
         let txt = encoder.encode(&mf, &mut writer);
         assert!(txt.is_ok());

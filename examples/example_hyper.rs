@@ -5,7 +5,7 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Response, Server,
 };
-use prometheus::{Counter, Encoder, Gauge, HistogramVec, TextEncoder};
+use prometheus::{Counter, Encoder, Gauge, HistogramVec, TextEncoder, EncoderFormatType};
 
 use lazy_static::lazy_static;
 use prometheus::{labels, opts, register_counter, register_gauge, register_histogram_vec};

@@ -1,13 +1,12 @@
 // Copyright 2019 TiKV Project Authors. Licensed under Apache-2.0.
+use protobuf::Message;
 
 use std::io::Write;
-
-use protobuf::Message;
 
 use crate::errors::Result;
 use crate::proto::MetricFamily;
 
-use super::{check_metric_family, Encoder};
+use super::{check_metric_family, Encoder, EncoderFormatType};
 
 /// The protocol buffer format of metric family.
 pub const PROTOBUF_FORMAT: &str = "application/vnd.google.protobuf; \
@@ -26,8 +25,11 @@ impl ProtobufEncoder {
     }
 }
 
-impl Encoder for ProtobufEncoder {
-    fn encode<W: Write>(&self, metric_families: &[MetricFamily], writer: &mut W) -> Result<()> {
+impl<W> Encoder<W> for ProtobufEncoder
+where
+    W: Write
+{
+    fn encode(&self, metric_families: &[MetricFamily], writer: &mut W) -> Result<()> {
         for mf in metric_families {
             // Fail-fast checks.
             check_metric_family(mf)?;
@@ -35,7 +37,9 @@ impl Encoder for ProtobufEncoder {
         }
         Ok(())
     }
+}
 
+impl EncoderFormatType for ProtobufEncoder {
     fn format_type(&self) -> &str {
         PROTOBUF_FORMAT
     }
