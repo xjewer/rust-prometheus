@@ -27,10 +27,38 @@ lazy_static! {
         .unwrap();
 }
 
+/// Auth methods to be used along with pushgateway
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum Auth {
+    /// `BasicAuthentication`
+    BasicAuthentication {
+        /// The Basic Authentication username (possibly empty string).
+        username: String,
+        /// The Basic Authentication password (possibly empty string).
+        password: String,
+    },
+    /// `BearerAuthentication`
+    BearerAuthentication {
+        /// The Bearer Authentication token.
+        token: String,
+    },
+}
+
+impl From<BasicAuthentication> for Auth {
+    fn from(auth: BasicAuthentication) -> Self {
+        Self::BasicAuthentication {
+            username: auth.username,
+            password: auth.password,
+        }
+    }
+}
+
 /// `BasicAuthentication` holder for supporting `push` to Pushgateway endpoints
 /// using Basic access authentication.
 /// Can be passed to any `push_metrics` method.
 #[derive(Debug)]
+#[deprecated(since="0.14.0", note="please use `Auth` enum instead")]
 pub struct BasicAuthentication {
     /// The Basic Authentication username (possibly empty string).
     pub username: String,
@@ -59,7 +87,7 @@ pub fn push_metrics<S: BuildHasher>(
     mfs: Vec<proto::MetricFamily>,
     basic_auth: Option<BasicAuthentication>,
 ) -> Result<()> {
-    push(job, grouping, url, mfs, "PUT", basic_auth)
+    push(job, grouping, url, mfs, "PUT", basic_auth.map(Auth::from))
 }
 
 /// `push_add_metrics` works like `push_metrics`, but only previously pushed
@@ -72,7 +100,7 @@ pub fn push_add_metrics<S: BuildHasher>(
     mfs: Vec<proto::MetricFamily>,
     basic_auth: Option<BasicAuthentication>,
 ) -> Result<()> {
-    push(job, grouping, url, mfs, "POST", basic_auth)
+    push(job, grouping, url, mfs, "POST", basic_auth.map(Auth::from))
 }
 
 const LABEL_NAME_JOB: &str = "job";
@@ -83,7 +111,7 @@ fn push<S: BuildHasher>(
     url: &str,
     mfs: Vec<proto::MetricFamily>,
     method: &str,
-    basic_auth: Option<BasicAuthentication>,
+    auth: Option<Auth>,
 ) -> Result<()> {
     // Suppress clippy warning needless_pass_by_value.
     let grouping = grouping;
@@ -156,9 +184,15 @@ fn push<S: BuildHasher>(
         .header(CONTENT_TYPE, encoder.format_type())
         .body(buf);
 
-    if let Some(BasicAuthentication { username, password }) = basic_auth {
-        builder = builder.basic_auth(username, Some(password));
-    }
+    builder = match auth {
+        Some(Auth::BasicAuthentication{username, password}) => {
+            builder.basic_auth(username, Some(password))
+        },
+        Some(Auth::BearerAuthentication{token}) => {
+            builder.bearer_auth(token)
+        },
+        None => builder,
+    };
 
     let response = builder.send().map_err(|e| Error::Msg(format!("{}", e)))?;
 
@@ -179,7 +213,7 @@ fn push_from_collector<S: BuildHasher>(
     url: &str,
     collectors: Vec<Box<dyn Collector>>,
     method: &str,
-    basic_auth: Option<BasicAuthentication>,
+    auth: Option<Auth>,
 ) -> Result<()> {
     let registry = Registry::new();
     for bc in collectors {
@@ -187,7 +221,7 @@ fn push_from_collector<S: BuildHasher>(
     }
 
     let mfs = registry.gather();
-    push(job, grouping, url, mfs, method, basic_auth)
+    push(job, grouping, url, mfs, method, auth)
 }
 
 /// `push_collector` push metrics collected from the provided collectors. It is
@@ -199,7 +233,7 @@ pub fn push_collector<S: BuildHasher>(
     collectors: Vec<Box<dyn Collector>>,
     basic_auth: Option<BasicAuthentication>,
 ) -> Result<()> {
-    push_from_collector(job, grouping, url, collectors, "PUT", basic_auth)
+    push_from_collector(job, grouping, url, collectors, "PUT", basic_auth.map(Auth::from))
 }
 
 /// `push_add_collector` works like `push_add_metrics`, it collects from the
@@ -211,7 +245,7 @@ pub fn push_add_collector<S: BuildHasher>(
     collectors: Vec<Box<dyn Collector>>,
     basic_auth: Option<BasicAuthentication>,
 ) -> Result<()> {
-    push_from_collector(job, grouping, url, collectors, "POST", basic_auth)
+    push_from_collector(job, grouping, url, collectors, "POST", basic_auth.map(Auth::from))
 }
 
 const DEFAULT_GROUP_LABEL_PAIR: (&str, &str) = ("instance", "unknown");
