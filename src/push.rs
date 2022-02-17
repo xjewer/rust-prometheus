@@ -166,28 +166,29 @@ fn push<S: BuildHasher>(
         push_url.pop();
     }
 
-    let mut url_components = Vec::new();
-    if job.contains('/') {
-        return Err(Error::Msg(format!("job contains '/': {}", job)));
-    }
-
-    // TODO: escape job
-    url_components.push(job.to_owned());
-
-    for (ln, lv) in &grouping {
-        // TODO: check label name
-        if lv.contains('/') {
-            return Err(Error::Msg(format!(
-                "value of grouping label {} contains '/': {}",
-                ln, lv
-            )));
+    if job != "" {
+        let mut url_components = Vec::new();
+        if job.contains('/') {
+            return Err(Error::Msg(format!("job contains '/': {}", job)));
         }
-        url_components.push(ln.to_owned());
-        url_components.push(lv.to_owned());
+    
+        // TODO: escape job
+        url_components.push(job.to_owned());
+    
+        for (ln, lv) in &grouping {
+            // TODO: check label name
+            if lv.contains('/') {
+                return Err(Error::Msg(format!(
+                    "value of grouping label {} contains '/': {}",
+                    ln, lv
+                )));
+            }
+            url_components.push(ln.to_owned());
+            url_components.push(lv.to_owned());
+        }
+    
+        push_url = format!("{}/metrics/job/{}", push_url, url_components.join("/"));
     }
-
-    push_url = format!("{}/metrics/job/{}", push_url, url_components.join("/"));
-
     
     let encoder: Box<dyn Encoder> = match encoder_type {
         EncoderType::TextEncoder => Box::new(TextEncoder::new()),
