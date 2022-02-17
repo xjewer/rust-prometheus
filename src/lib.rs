@@ -213,6 +213,8 @@ pub use self::encoder::TextEncoder;
 #[cfg(feature = "protobuf")]
 pub use self::encoder::PROTOBUF_FORMAT;
 pub use self::encoder::TEXT_FORMAT;
+pub use self::encoder::EncoderType;
+pub use self::encoder::EncoderFormatType;
 pub use self::errors::{Error, Result};
 pub use self::gauge::{Gauge, GaugeVec, IntGauge, IntGaugeVec};
 pub use self::histogram::DEFAULT_BUCKETS;
@@ -222,6 +224,7 @@ pub use self::metrics::Opts;
 #[cfg(feature = "push")]
 pub use self::push::{
     hostname_grouping_key, push_add_collector, push_add_metrics, push_collector, push_metrics,
+    push_add_collector_with_encoder, push_add_metrics_with_encoder, push_collector_with_encoder, push_metrics_with_encoder,
     BasicAuthentication,
 };
 pub use self::registry::Registry;
