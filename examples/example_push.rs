@@ -58,7 +58,7 @@ fn main() {
             labels! {"instance".to_owned() => "HAL-9000".to_owned(),},
             &address,
             metric_families,
-            Some(prometheus::BasicAuthentication {
+            Some(prometheus::Auth::BasicAuthentication {
                 username: "user".to_owned(),
                 password: "pass".to_owned(),
             }),

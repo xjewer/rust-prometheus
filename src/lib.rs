@@ -225,7 +225,7 @@ pub use self::metrics::Opts;
 pub use self::push::{
     hostname_grouping_key, push_add_collector, push_add_metrics, push_collector, push_metrics,
     push_add_collector_with_encoder, push_add_metrics_with_encoder, push_collector_with_encoder, push_metrics_with_encoder,
-    BasicAuthentication,
+    BasicAuthentication, Auth,
 };
 pub use self::registry::Registry;
 pub use self::registry::{default_registry, gather, register, unregister};

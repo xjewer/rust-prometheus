@@ -29,10 +29,38 @@ lazy_static! {
         .unwrap();
 }
 
+/// Auth methods to be used along with pushgateway
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum Auth {
+    /// `BasicAuthentication`
+    BasicAuthentication {
+        /// The Basic Authentication username (possibly empty string).
+        username: String,
+        /// The Basic Authentication password (possibly empty string).
+        password: String,
+    },
+    /// `BearerAuthentication`
+    BearerAuthentication {
+        /// The Bearer Authentication token.
+        token: String,
+    },
+}
+
+impl From<BasicAuthentication> for Auth {
+    fn from(auth: BasicAuthentication) -> Self {
+        Self::BasicAuthentication {
+            username: auth.username,
+            password: auth.password,
+        }
+    }
+}
+
 /// `BasicAuthentication` holder for supporting `push` to Pushgateway endpoints
 /// using Basic access authentication.
 /// Can be passed to any `push_metrics` method.
 #[derive(Debug)]
+#[deprecated(since="0.14.0", note="please use `Auth` enum instead")]
 pub struct BasicAuthentication {
     /// The Basic Authentication username (possibly empty string).
     pub username: String,
@@ -66,7 +94,7 @@ pub fn push_metrics<S: BuildHasher>(
     #[cfg(feature = "protobuf")]
     let encoder_type = EncoderType::ProtobufEncoder;
 
-    push(job, grouping, url, mfs, "PUT", basic_auth, encoder_type)
+    push(job, grouping, url, mfs, "PUT", basic_auth.map(Auth::from), encoder_type)
 }
 
 /// push_metrics_with_encoder works like `push_metrics`,
@@ -76,10 +104,10 @@ pub fn push_metrics_with_encoder<S: BuildHasher>(
     grouping: HashMap<String, String, S>,
     url: &str,
     mfs: Vec<proto::MetricFamily>,
-    basic_auth: Option<BasicAuthentication>,
+    auth: Option<Auth>,
     encoder_type: EncoderType,
 ) -> Result<()> {
-    push(job, grouping, url, mfs, "PUT", basic_auth, encoder_type)
+    push(job, grouping, url, mfs, "PUT", auth, encoder_type)
 }
 
 
@@ -98,7 +126,7 @@ pub fn push_add_metrics<S: BuildHasher>(
     #[cfg(feature = "protobuf")]
     let encoder_type = EncoderType::ProtobufEncoder;
 
-    push(job, grouping, url, mfs, "POST", basic_auth, encoder_type)
+    push(job, grouping, url, mfs, "POST", basic_auth.map(Auth::from), encoder_type)
 }
 
 /// `push_add_metrics_with_encoder` works like `push_add_metrics`,
@@ -108,10 +136,10 @@ pub fn push_add_metrics_with_encoder<S: BuildHasher>(
     grouping: HashMap<String, String, S>,
     url: &str,
     mfs: Vec<proto::MetricFamily>,
-    basic_auth: Option<BasicAuthentication>,
+    auth: Option<Auth>,
     encoder_type: EncoderType,
 ) -> Result<()> {
-    push(job, grouping, url, mfs, "POST", basic_auth, encoder_type)
+    push(job, grouping, url, mfs, "POST", auth, encoder_type)
 }
 
 const LABEL_NAME_JOB: &str = "job";
@@ -122,7 +150,7 @@ fn push<S: BuildHasher>(
     url: &str,
     mfs: Vec<proto::MetricFamily>,
     method: &str,
-    basic_auth: Option<BasicAuthentication>,
+    auth: Option<Auth>,
     encoder_type: EncoderType,
 ) -> Result<()> {
     // Suppress clippy warning needless_pass_by_value.
@@ -202,9 +230,15 @@ fn push<S: BuildHasher>(
         .header(CONTENT_TYPE, encoder.format_type())
         .body(buf);
 
-    if let Some(BasicAuthentication { username, password }) = basic_auth {
-        builder = builder.basic_auth(username, Some(password));
-    }
+    builder = match auth {
+        Some(Auth::BasicAuthentication{username, password}) => {
+            builder.basic_auth(username, Some(password))
+        },
+        Some(Auth::BearerAuthentication{token}) => {
+            builder.bearer_auth(token)
+        },
+        None => builder,
+    };
 
     let response = builder.send().map_err(|e| Error::Msg(format!("{}", e)))?;
 
@@ -225,7 +259,7 @@ fn push_from_collector<S: BuildHasher>(
     url: &str,
     collectors: Vec<Box<dyn Collector>>,
     method: &str,
-    basic_auth: Option<BasicAuthentication>,
+    auth: Option<Auth>,
     encoder_type: EncoderType,
 ) -> Result<()> {
     let registry = Registry::new();
@@ -234,7 +268,7 @@ fn push_from_collector<S: BuildHasher>(
     }
 
     let mfs = registry.gather();
-    push(job, grouping, url, mfs, method, basic_auth, encoder_type)
+    push(job, grouping, url, mfs, method, auth, encoder_type)
 }
 
 /// `push_collector` push metrics collected from the provided collectors. It is
@@ -251,7 +285,7 @@ pub fn push_collector<S: BuildHasher>(
     #[cfg(feature = "protobuf")]
     let encoder_type = EncoderType::ProtobufEncoder;
 
-    push_from_collector(job, grouping, url, collectors, "PUT", basic_auth, encoder_type)
+    push_from_collector(job, grouping, url, collectors, "PUT", basic_auth.map(Auth::from), encoder_type)
 }
 
 /// `push_collector_with_encoder` works like `push_collector`,
@@ -261,10 +295,10 @@ pub fn push_collector_with_encoder<S: BuildHasher>(
     grouping: HashMap<String, String, S>,
     url: &str,
     collectors: Vec<Box<dyn Collector>>,
-    basic_auth: Option<BasicAuthentication>,
+    auth: Option<Auth>,
     encoder_type: EncoderType,
 ) -> Result<()> {
-    push_from_collector(job, grouping, url, collectors, "PUT", basic_auth, encoder_type)
+    push_from_collector(job, grouping, url, collectors, "PUT", auth, encoder_type)
 }
 
 /// `push_add_collector` works like `push_add_metrics`, it collects from the
@@ -280,7 +314,7 @@ pub fn push_add_collector<S: BuildHasher>(
     let encoder_type = EncoderType::TextEncoder;
     #[cfg(feature = "protobuf")]
     let encoder_type = EncoderType::ProtobufEncoder;
-    push_from_collector(job, grouping, url, collectors, "POST", basic_auth, encoder_type)
+    push_from_collector(job, grouping, url, collectors, "POST", basic_auth.map(Auth::from), encoder_type)
 }
 
 /// `push_add_collector_with_encoder` works like `push_add_collector`,
@@ -290,10 +324,10 @@ pub fn push_add_collector_with_encoder<S: BuildHasher>(
     grouping: HashMap<String, String, S>,
     url: &str,
     collectors: Vec<Box<dyn Collector>>,
-    basic_auth: Option<BasicAuthentication>,
+    auth: Option<Auth>,
     encoder_type: EncoderType,
 ) -> Result<()> {
-    push_from_collector(job, grouping, url, collectors, "POST", basic_auth, encoder_type)
+    push_from_collector(job, grouping, url, collectors, "POST", auth, encoder_type)
 }
 
 const DEFAULT_GROUP_LABEL_PAIR: (&str, &str) = ("instance", "unknown");
