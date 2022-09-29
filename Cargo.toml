@@ -22,6 +22,7 @@ gen = ["protobuf-codegen-pure"]
 nightly = ["libc"]
 process = ["libc", "procfs"]
 push = ["reqwest", "libc"]
+default = ["push"]
 
 [dependencies]
 cfg-if = "^1.0"
